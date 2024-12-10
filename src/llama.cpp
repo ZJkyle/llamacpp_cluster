@@ -17605,9 +17605,9 @@ static int llama_decode_internal(
         }
 
         // plot the computation graph in dot format (for debugging purposes)
-        //if (n_past%100 == 0) {
-        //    ggml_graph_dump_dot(gf, NULL, "llama.dot");
-        //}
+        if (batch.pos[batch.n_tokens - 1] % 45 == 0) {
+            ggml_graph_dump_dot(gf, NULL, "llama.dot");
+        }
 
         // extract logits
         if (res) {
