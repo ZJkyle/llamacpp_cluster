@@ -5987,7 +5987,7 @@ struct ggml_tensor * ggml_graph_get_tensor(const struct ggml_cgraph * cgraph, co
 
 struct ggml_tensor * ggml_graph_get_grad(const struct ggml_cgraph * cgraph, const struct ggml_tensor * node) {
     const size_t igrad = ggml_hash_find(&cgraph->visited_hash_set, node);
-    return igrad != GGML_HASHSET_FULL && ggml_bitset_get(cgraph->visited_hash_set.used, igrad) ? cgraph->grads[igrad] : NULL;
+    //return igrad != GGML_HASHSET_FULL && ggml_bitset_get(cgraph->visited_hash_set.used, igrad) ? cgraph->grads[igrad] : NULL;
 }
 
 struct ggml_tensor * ggml_graph_get_grad_acc(const struct ggml_cgraph * cgraph, const struct ggml_tensor * node) {
@@ -6197,6 +6197,96 @@ void ggml_graph_dump_dot(const struct ggml_cgraph * gb, const struct ggml_cgraph
 
     GGML_LOG_INFO("%s: dot -Tpng %s -o %s.png && open %s.png\n", __func__, filename, filename, filename);
 }
+
+void ggml_graph_dump_dot_forward(const struct ggml_cgraph * gf, const char * filename) {
+    FILE * fp = ggml_fopen(filename, "w");
+    GGML_ASSERT(fp);
+
+    fprintf(fp, "digraph G {\n");
+    fprintf(fp, "  newrank = true;\n");
+    fprintf(fp, "  rankdir = TB;\n");
+
+    // 處理 forward graph 的 nodes
+    for (int i = 0; i < gf->n_nodes; i++) {
+        struct ggml_tensor * node = gf->nodes[i];
+        char color[16];
+
+        // 因為沒有後向圖和梯度，簡化顏色邏輯
+        if (node->flags & GGML_TENSOR_FLAG_PARAM) {
+            snprintf(color, sizeof(color), "yellow");
+        } else {
+            snprintf(color, sizeof(color), "white");
+        }
+
+        fprintf(fp, "  \"%p\" [ "
+                    "style = filled; fillcolor = %s; shape = record; "
+                    "label=\"",
+                (void *) node, color);
+
+        if (strlen(node->name) > 0) {
+            fprintf(fp, "%s (%s)|", node->name, ggml_type_name(node->type));
+        } else {
+            fprintf(fp, "(%s)|", ggml_type_name(node->type));
+        }
+
+        // 印出 node 的維度資訊
+        if (ggml_is_matrix(node)) {
+            fprintf(fp, "%d [%" PRId64 ", %" PRId64 "] | <x>%s", i, node->ne[0], node->ne[1], ggml_op_symbol(node->op));
+        } else {
+            fprintf(fp, "%d [%" PRId64 ", %" PRId64 ", %" PRId64 "] | <x>%s", i, node->ne[0], node->ne[1], node->ne[2], ggml_op_symbol(node->op));
+        }
+        fprintf(fp, "\"; ]\n");
+    }
+
+    // 處理 leafs（常數或輸入）
+    for (int i = 0; i < gf->n_leafs; i++) {
+        struct ggml_tensor * node = gf->leafs[i];
+        char color[16];
+        snprintf(color, sizeof(color), "pink");
+
+        fprintf(fp, "  \"%p\" [ "
+                    "style = filled; fillcolor = %s; shape = record; "
+                    "label=\"<x>",
+                (void *) node, color);
+
+        if (strlen(node->name) > 0) {
+            fprintf(fp, "%s (%s)|", node->name, ggml_type_name(node->type));
+        } else {
+            fprintf(fp, "(%s)|", ggml_type_name(node->type));
+        }
+
+        fprintf(fp, "CONST %d [%" PRId64 ", %" PRId64 "]\"; ]\n", i, node->ne[0], node->ne[1]);
+    }
+
+    // 繪製 edges
+    for (int i = 0; i < gf->n_nodes; i++) {
+        struct ggml_tensor * node = gf->nodes[i];
+        for (int j = 0; j < GGML_MAX_SRC; j++) {
+            if (node->src[j]) {
+                char label[16];
+                snprintf(label, sizeof(label), "src %d", j);
+                ggml_graph_dump_dot_node_edge(fp, gf, node, node->src[j], label);
+            }
+        }
+    }
+
+    for (int i = 0; i < gf->n_leafs; i++) {
+        struct ggml_tensor * node = gf->leafs[i];
+        for (int j = 0; j < GGML_MAX_SRC; j++) {
+            if (node->src[j]) {
+                char label[16];
+                snprintf(label, sizeof(label), "src %d", j);
+                ggml_graph_dump_dot_leaf_edge(fp, node, node->src[j], label);
+            }
+        }
+    }
+
+    fprintf(fp, "}\n");
+    fclose(fp);
+
+    //GGML_LOG_INFO("%s: dot -Tpng %s -o %s.png && open %s.png\n", __func__, filename, filename, filename);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 

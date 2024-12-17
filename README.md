@@ -242,7 +242,6 @@ The project also includes many example programs and tools using the `llama` libr
 
 - [main (cli)](examples/main/README.md)
 - [server](examples/server/README.md)
-- [GBNF grammars](grammars/README.md)
 
 #### Development documentation
 

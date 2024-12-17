@@ -10789,7 +10789,7 @@ struct llm_build_context {
         const float kq_scale = hparams.f_attention_scale == 0.0f ? 1.0f/sqrtf(float(n_embd_head)) : hparams.f_attention_scale;
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
-
+            
             // norm
             cur = llm_build_norm(ctx0, inpL, hparams,
                     model.layers[il].attn_norm, NULL,
@@ -10843,6 +10843,12 @@ struct llm_build_context {
             }
 
             if (il == n_layer - 1) {
+                // skip computing output for unused tokens
+                struct ggml_tensor * inp_out_ids = build_inp_out_ids();
+                n_tokens = n_outputs;
+                cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
+                inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
+            }else {
                 // skip computing output for unused tokens
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
                 n_tokens = n_outputs;
@@ -14618,6 +14624,11 @@ struct llm_build_context {
                 n_tokens = n_outputs;
                 cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
                 inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
+            }else {
+                struct ggml_tensor * inp_out_ids = build_inp_out_ids();
+                n_tokens = n_outputs;
+                cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
+                inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
             }
 
             struct ggml_tensor * ffn_inp = ggml_add(ctx0, cur, inpSA);
@@ -17606,7 +17617,7 @@ static int llama_decode_internal(
 
         // plot the computation graph in dot format (for debugging purposes)
         if (batch.pos[batch.n_tokens - 1] % 45 == 0) {
-            ggml_graph_dump_dot(gf, NULL, "llama.dot");
+            ggml_graph_dump_dot_forward(gf, "llama.dot");
         }
 
         // extract logits
